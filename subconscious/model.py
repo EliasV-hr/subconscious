@@ -323,8 +323,12 @@ class RedisModel(object, metaclass=ModelMeta):
             User.get_by(db, age=23, name="guido")
 
         """
-        for key in await cls._get_ids_filter_by(db, **kwargs):
-            yield await cls.load(db, key)
+        if kwargs == {}:
+            async for x in cls.all(db):
+                yield x
+        else:
+            for key in await cls._get_ids_filter_by(db, **kwargs):
+                yield await cls.load(db, key)
 
     @classmethod
     async def get_object_or_none(cls, db, **kwargs):
@@ -333,6 +337,13 @@ class RedisModel(object, metaclass=ModelMeta):
         WARNING: if there are more than 1 results in cls that satisfy the conditions in kwargs,
         only 1 random result will be returned
         """
+        if kwargs == {}:
+            result = [x async for x in cls.all(db, limit=1)]
+            if result:
+                return result[0]
+            else:
+                return None
+
         for key in await cls._get_ids_filter_by(db, **kwargs):
             return await cls.load(db, key)
         return None
