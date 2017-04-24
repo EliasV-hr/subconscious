@@ -323,12 +323,8 @@ class RedisModel(object, metaclass=ModelMeta):
             User.get_by(db, age=23, name="guido")
 
         """
-        if kwargs == {}:
-            async for x in cls.all(db):
-                yield x
-        else:
-            for key in await cls._get_ids_filter_by(db, **kwargs):
-                yield await cls.load(db, key)
+        for key in await cls._get_ids_filter_by(db, **kwargs):
+            yield await cls.load(db, key)
 
     @classmethod
     async def get_object_or_none(cls, db, **kwargs):

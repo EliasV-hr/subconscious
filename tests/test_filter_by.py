@@ -64,11 +64,3 @@ class TestFilterBy(BaseTestCase):
                 result_list.append(x)
             self.assertEqual(1, len(result_list))
         self.loop.run_until_complete(_test())
-
-    def test_filter_by_no_kwargs(self):
-        async def _test():
-            result_list = []
-            async for x in TestUser.filter_by(self.db):
-                result_list.append(x)
-            self.assertEqual(10, len(result_list))
-        self.loop.run_until_complete(_test())
