@@ -44,3 +44,8 @@ class TestGetObectOrNone(BaseTestCase):
         diner = self.loop.run_until_complete(Diner.get_object_or_none(self.db, table_num=[1, 2]))
         self.assertIsNotNone(diner)
         self.assertEqual(Diner, type(diner))
+
+        # no kwargs
+        diner = self.loop.run_until_complete(Diner.get_object_or_none(self.db))
+        self.assertIsNotNone(diner)
+        self.assertEqual(Diner, type(diner))
