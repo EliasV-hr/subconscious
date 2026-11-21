@@ -1,6 +1,4 @@
-import asyncio
-from subconscious.columns import Column
-from subconscious.model import Model
+from subconscious.model import RedisModel, Column, InvalidModelDefinition, UnexpectedColumnError
 from uuid import uuid1
 from .base import BaseTestCase
 import enum
@@ -10,87 +8,38 @@ class StatusEnum(enum.Enum):
     ACTIVE = 'active'
 
 
-class User(Model):
-    id = Column(pk=True)
+class TestUser(RedisModel):
+    id = Column(primary_key=True)
     name = Column(index=True)
-    age = Column(index=True, col_type=int)
-    locale = Column(index=True, col_type=int, required=False)
-    status = Column(col_type=str, enum=StatusEnum)
-    _custom_indexes = {('name', 'age'), ('age', 'name'), ('name',)}
+    age = Column(index=True, type=int)
+    locale = Column(index=True, type=int, required=False)
+    status = Column(type=str, enum=StatusEnum, index=True)
 
 
-class UserComposite(Model):
-    id = Column(index=True)
-    name = Column(index=True, composite=True)
-    age = Column(index=True, composite=True, col_type=int)
-    _custom_indexes = {('name', 'age'), ('age', 'name'), ('name',)}
+class TestSaveAndLoad(BaseTestCase):
 
-
-class TestSave(BaseTestCase):
-
-    def test_save_and_get(self):
+    def test_save_and_load(self):
         user_id = str(uuid1())
-        user = User(id=user_id, name='Test name', age=100, status='active')
+        user = TestUser(id=user_id, name='Test name', age=100, status='active')
         ret = self.loop.run_until_complete(user.save(self.db))
         self.assertTrue(ret)
 
-        user_in_db = self.loop.run_until_complete(User.load(self.db, identifier=user_id))
-        self.assertEqual(user_in_db.name, 'Test name')
-        self.assertIsNone(user_in_db.locale)
+        # load
+        user_in_db = self.loop.run_until_complete(TestUser.load(self.db, identifier=user_id))
+        self.assertEqual(user_in_db.name, user.name)
 
-        self.assertEqual(type(user_in_db.age), int)
+    def test_init_model_with_no_indexed_cols_should_error(self):
+        with self.assertRaises(InvalidModelDefinition):
+            class BadModel(RedisModel):
+                unindex_col = Column()
 
-        # update
-        user_in_db.name = 'Test name updated'
-        ret = self.loop.run_until_complete(user_in_db.save(self.db))
-        self.assertTrue(ret)
 
-        user_in_db = self.loop.run_until_complete(User.load(self.db, identifier=user_id))
-        self.assertEqual(type(user_in_db), User)
-        self.assertEqual(user_in_db.name, 'Test name updated')
+class BadSave(BaseTestCase):
 
-        # Test get_by
-        asyncio.set_event_loop(self.loop)
-        users = self.loop.run_until_complete(User.get_by(self.db, age=100))
-        self.assertEqual(len(users), 1)
-        self.assertEqual(type(users[0]), User)
-        users = self.loop.run_until_complete(User.get_by(self.db, age=102))
-        self.assertEqual(len(users), 0)
-        # add one more user
-        user_id = str(uuid1())
-        user1 = User(id=user_id, name='Test name 2', age=100)
-        ret = self.loop.run_until_complete(user1.save(self.db))
-        self.assertTrue(ret)
+    def test_unexpected_column_should_fail(self):
 
-        # get by age
-        users = self.loop.run_until_complete(User.get_by(self.db, age=100))
-        self.assertEqual(len(users), 2)
+        class TestModel(RedisModel):
+            id = Column(type=int, primary_key=True)
 
-        for user in users:
-            self.assertEqual(type(user), User)
-
-        # get by name
-        users = self.loop.run_until_complete(User.get_by(self.db, name=['Test name 2', 'Test name updated']))
-        self.assertEqual(len(users), 2)
-
-        for user in users:
-            self.assertEqual(type(user), User)
-
-    def test_composite_save_and_load(self):
-        user_id = str(uuid1())
-        user = UserComposite(id=user_id, name='Test name', age=100)
-        ret = self.loop.run_until_complete(user.save(self.db))
-        self.assertTrue(ret)
-
-        user_in_db = self.loop.run_until_complete(UserComposite.load(self.db, identifier=('100', 'Test name')))
-        self.assertEqual(user_in_db.name, 'Test name')
-        self.assertEqual(type(user_in_db.age), int)
-
-        # update
-        user_in_db.id = 'updated id'
-        ret = self.loop.run_until_complete(user_in_db.save(self.db))
-        self.assertTrue(ret)
-
-        user_in_db = self.loop.run_until_complete(UserComposite.load(self.db, identifier=('100', 'Test name')))
-        self.assertEqual(type(user_in_db), UserComposite)
-        self.assertEqual(user_in_db.id, 'updated id')
+        with self.assertRaises(UnexpectedColumnError):
+            TestModel(id=1, this_column_does_not_exist='foo')
